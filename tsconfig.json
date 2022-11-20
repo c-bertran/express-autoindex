@@ -1,0 +1,25 @@
+{
+	"compilerOptions": {
+		"baseUrl": ".",
+		"composite": true,
+		"declaration": true,
+		"declarationDir": "dist/types",
+		"declarationMap": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"isolatedModules": true,
+		"lib": ["ESNext"],
+		"allowJs": true,
+		"moduleResolution": "Node",
+		"outDir": "dist",
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"sourceMap": false,
+		"target": "ESNext",
+		"module": "ESNext",
+		"types": ["node"],
+	},
+	"exclude": ["node_modules/*"],
+	"include": ["src/**/*"]
+}

@@ -1,0 +1,41 @@
+# Auto detect
+*                 text eol=lf
+
+# Source code
+*.js              text
+*.json            text
+*.jsx             text
+*.xml             text
+*.xhtml           text diff=html
+
+# Text
+*.markdown        text
+*.md              text
+*.txt             text
+AUTHORS           text
+CHANGELOG         text
+CHANGES           text
+CONTRIBUTING      text
+COPYING           text
+copyright         text
+*COPYRIGHT*       text
+INSTALL           text
+license           text
+LICENSE           text
+NEWS              text
+readme            text
+*README*          text
+TODO              text
+
+# Config
+.gitattributes    text
+.gitconfig        text
+*.lock            text -diff
+
+# Graphics
+*.jpg             binary
+*.jpeg            binary
+*.png             binary
+
+# Ignore files (like .npmignore or .gitignore)
+*.*ignore         text
