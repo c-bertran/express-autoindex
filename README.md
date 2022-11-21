@@ -9,7 +9,7 @@ The objectives are:
 * Correctly take into consideration the majority of `MIME types`, and the generation of the most customizable pages possible
 * Native support for `Typescript`, `EcmaScript` and `CommonJS`
 * The least amount of dependency possible (currently only `one`)
-* The lightest possible (`10 Ko`)
+* The `lightest` possible
 
 <p align="center">
 	<img width="500" alt="Exemple image" src="./src/img.png"/>

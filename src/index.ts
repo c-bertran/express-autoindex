@@ -4,6 +4,7 @@ import { readdir, stat } from 'fs/promises';
 import { posix, resolve } from 'path';
 import * as mime from 'mime';
 
+import type { Stats } from 'fs';
 import type { Request, Response, NextFunction } from 'express';
 import { autoIndexOptions, statFile, serveConfig, save } from './interface';
 
@@ -18,7 +19,7 @@ class autoindex {
 	root: string;
 
 	constructor(root: string, path: string, options: autoIndexOptions | undefined) {
-		this.htmlPage = '<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{{title}}</title></head><body><h1>{{title}}</h1><hr/><table>{{content}}</table><hr/></body><style type="text/css">html { font-family: Arial, Helvetica, sans-serif; }table {font-family: \'Courier New\', Courier, monospace;font-size: 12px; font-weight: 400; letter-spacing: normal; line-height: normal; font-style: normal;}tr td:first-child {min-width: 20%;}td a {margin-right: 1em;}td.date {text-align: end}</style></html>';
+		this.htmlPage = '<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{{title}}</title></head><body><h1>{{title}}</h1><hr/><table>{{content}}</table><hr/></body><style type="text/css">html{font-family:Arial,Helvetica,sans-serif}table{font-family:\'Courier New\',Courier,monospace;font-size:12px;font-weight:400;letter-spacing:normal;line-height:normal;font-style:normal}tr td:first-child{min-width:20%}td a{margin-right:1em}td.date{text-align:end}</style></html>';
 		this.month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 		this.savePage = [];
 		this.savePageDeadline = 300000; /// 5 * 60 * 1000 => 5min
@@ -82,8 +83,10 @@ class autoindex {
 			.then((statOfFile) => {
 				if (statOfFile.isFile())
 					this.file(data, res);
-				else
+				else if (statOfFile.isDirectory())
 					this.directory(data, res, next);
+				else
+					throw new Error(`${data.title} is not a directory or a file`);
 			})
 			.catch((e) => {
 				next(this.error(e));
@@ -121,6 +124,20 @@ class autoindex {
 		}
 	}
 
+	private timePad(n: number): string {
+		if (n < 10)
+			return `0${n}`;
+		return String(n); 
+	}
+
+	private genTime(_stat: Stats): string {
+		let ret = '';
+		if (_stat.mtime.getUTCDay() > 0)
+			ret += `${this.timePad(_stat.mtime.getUTCDay())}-`;
+		ret += `${this.month[_stat.mtime.getUTCMonth()]}-${_stat.mtime.getUTCFullYear()} ${this.timePad(_stat.mtime.getUTCHours())}:${this.timePad(_stat.mtime.getUTCMinutes())}`;
+		return ret;
+	}
+
 	private generateRow(data: statFile): string {
 		let ret = `<tr><td><a href="${data.el.dirent[0]}">${data.el.dirent[1]}</a></td>`;
 		if (this.options.displayDate)
@@ -146,18 +163,6 @@ class autoindex {
 							|| (this.options.exclude && this.options.exclude.test(el.name)))
 						continue;
 					const _stat = await stat(resolve(data.serverPath, el.name));
-					const genTime = (): string => {
-						const pad = (n: number): string => {
-							if (n < 10)
-								return `0${n}`;
-							return String(n); 
-						};
-						let ret = '';
-						if (_stat.mtime.getUTCDay() > 0)
-							ret += `${pad(_stat.mtime.getUTCDay())}-`;
-						ret += `${this.month[_stat.mtime.getUTCMonth()]}-${_stat.mtime.getUTCFullYear()} ${pad(_stat.mtime.getUTCHours())}:${pad(_stat.mtime.getUTCMinutes())}`;
-						return ret;
-					};
 					elements.push({
 						dirent: el,
 						el: {
@@ -165,7 +170,7 @@ class autoindex {
 								? '/'
 								: ''
 							}`],
-							time: genTime(),
+							time: this.genTime(_stat),
 							size: (el.isFile())
 								? String(_stat.size)
 								: '-'
