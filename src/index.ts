@@ -82,7 +82,7 @@ class autoindex {
 		stat(data.serverPath)
 			.then((statOfFile) => {
 				if (statOfFile.isFile())
-					this.file(data, res);
+					this.file(data, statOfFile, res);
 				else if (statOfFile.isDirectory())
 					this.directory(data, res, next);
 				else
@@ -103,8 +103,9 @@ class autoindex {
 		res.json(data);
 	}
 
-	private file(data: serveConfig, res: Response) {
+	private file(data: serveConfig, stat: Stats, res: Response) {
 		const mimeType = mime.getType(data.serverPath) ?? 'application/octet-stream';
+		res.setHeader('Content-Length', stat.size);
 		res.setHeader('Content-Type', mimeType);
 		res.writeHead(200);
 		createReadStream(data.serverPath).pipe(res);

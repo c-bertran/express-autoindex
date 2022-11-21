@@ -1,6 +1,6 @@
 {
   "name": "express-autoindex",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "express-autoindex produce a directory listing like Nginx, Apache, etc...",
   "keywords": [
 		"express",
