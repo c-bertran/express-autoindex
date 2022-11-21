@@ -90,7 +90,7 @@ with a `path` of `'public'` will look at `'public/some/dir'`
   Send data in json format instead of an html page. Might be useful if you want to use the data for another application
   **Default** to `false`
 
-* #### json
+* #### strict
   type: `boolean`
 
   Allow only `HEAD` and `GET` HTTP methods
