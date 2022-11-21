@@ -3,11 +3,14 @@
   "version": "1.0.0",
   "description": "express-autoindex produce a directory listing like Nginx, Apache, etc...",
   "keywords": [
-    "mapcraft",
-    "minecraft",
-    "api",
-    "mapcraft-api"
-  ],
+		"express",
+		"autoindex",
+		"index",
+		"serve",
+		"directory",
+		"listening",
+		"nginx"
+	],
   "author": "Clément Bertrand (https://github.com/c-bertran)",
   "license": "GPL-3.0",
   "repository": {
