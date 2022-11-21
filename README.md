@@ -12,7 +12,7 @@ The objectives are:
 * The lightest possible (`10 Ko`)
 
 <p align="center">
-	<img width="300" alt="Exemple image" src="./src/img.png"/>
+	<img width="500" alt="Exemple image" src="./src/img.png"/>
 </p>
 
 ## Install
