@@ -2,61 +2,56 @@ import type { Dirent } from 'fs';
 
 export interface autoIndexOptions {
 	/**
-	 * Cache data based of time, default to 5 minutes
+	 * Caches for a defined time the generated pages. Very useful to save server resources
 	 * 
-	 * Pass false to disable the option
-	 * 
-	 * Accept number of milliseconds
-	 * 
+	 * Pass `false` to disable the cache, or the number of milliseconds representing the cache expiration time
 	 * 
 	 * Default to `300000` => 5 mins
 	 */
 	cache?: number | false;
 	
 	/**
-	 * Display directory at top
+	 * Display directories before files
 	 *
 	 * Default to `false`
 	 */
 	dirAtTop?: boolean;
 
 	/**
-	 * Display date
+	 * Display the last modification date of the file or directory if available
 	 * 
 	 * Default to `true`
 	 */
 	displayDate?: boolean;
 
 	/**
-	 * Display dotfiles
-	 * * 
+	 * Display dotfiles (.env, .yarnrc, ...)
+	 *
 	 * Default to `false`
 	 */
 	displayDotfile?: boolean;
 
 	/**
-	 * Display size
+	 * Display size of the file or directory if available
 	 * 
 	 * Default to `true`
 	 */
 	displaySize?: boolean;
 
 	/**
-	 * Regular expression for files/dirs exclude
-	 * 
-	 * Default to `undefined`
+	 * Regular expression for files/dirs exclude, for example `/my-file.json|\*.cpp/`
 	 */
-	exclude?: RegExp | undefined;
+	exclude?: RegExp;
 
 	/**
-	 * Display json output instead of html
+	 * Send data in json format instead of an html page. Might be useful if you want to use the data for another application
 	 * 
 	 * Default to `false`
 	 */
 	json?: boolean;
 
 	/**
-	 * Flag for allow `HEAD` and `GET` HTTP methods only
+	 * Allow only `HEAD` and `GET` HTTP methods
 	 * 
 	 * Default to `true`
 	 */

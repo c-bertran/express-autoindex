@@ -1,7 +1,7 @@
 {
   "name": "express-autoindex",
   "version": "1.0.0",
-  "description": "Express middleware produces a directory listing like Nginx, Apache, etc...",
+  "description": "express-autoindex produce a directory listing like Nginx, Apache, etc...",
   "keywords": [
     "mapcraft",
     "minecraft",
