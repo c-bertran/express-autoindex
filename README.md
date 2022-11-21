@@ -11,6 +11,10 @@ The objectives are:
 * The least amount of dependency possible (currently only `one`)
 * The lightest possible (`10 Ko`)
 
+<p align="center">
+	<img width="300" alt="Exemple image" src="./src/img.png"/>
+</p>
+
 ## Install
 
 ```sh
