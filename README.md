@@ -53,30 +53,35 @@ with a `path` of `'public'` will look at `'public/some/dir'`
 
   Caches for a defined time the generated pages. Very useful to save server resources.
   Pass `false` to disable the cache, or the number of milliseconds representing the cache expiration time
+
   **Default** to `300000` = 5 mins
 
 * #### dirAtTop
   type: `boolean`
 
   Display directories before files
-  **Default** to `false`
+
+  **Default** to `true`
 
 * #### displayDate
   type: `boolean`
 
   Display the last modification date of the file or directory if available
+
   **Default** to `true`
 
 * #### displayDotfile
   type: `boolean`
 
   Display dotfiles (.env, .yarnrc, ...)
+
   **Default** to `false`
 
 * #### displaySize
   type: `boolean`
 
   Display size of the file or directory if available
+
   **Default** to `true`
 
 * #### exclude
@@ -88,12 +93,14 @@ with a `path` of `'public'` will look at `'public/some/dir'`
   type: `boolean`
 
   Send data in json format instead of an html page. Might be useful if you want to use the data for another application
+
   **Default** to `false`
 
 * #### strict
   type: `boolean`
 
   Allow only `HEAD` and `GET` HTTP methods
+	
   **Default** to `true`
 
 ## Minimalist example

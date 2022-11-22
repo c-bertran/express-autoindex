@@ -188,12 +188,14 @@ class autoindex {
 							size: d.el.size
 						};
 					});
-					this.savePage.push({
-						json: true,
-						data: ret,
-						deadline: new Date(new Date().getTime() + this.savePageDeadline),
-						path: data.savePath
-					});
+					if (this.options.cache !== undefined) {
+						this.savePage.push({
+							json: true,
+							data: ret,
+							deadline: new Date(new Date().getTime() + this.savePageDeadline),
+							path: data.savePath
+						});
+					}
 					return this.send(ret, res);
 				}
 
