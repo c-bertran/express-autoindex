@@ -6,9 +6,10 @@ import * as mime from 'mime';
 
 import type { Stats } from 'fs';
 import type { Request, Response, NextFunction } from 'express';
-import { autoIndexOptions, statFile, serveConfig, save } from './interface';
+import type { autoIndexOptions, statFile, serveConfig, save } from './interface';
 
 class autoindex {
+	private isProduction: boolean;
 	private htmlPage: string;
 	private month: string[];
 	private savePage: save[];
@@ -19,7 +20,8 @@ class autoindex {
 	root: string;
 
 	constructor(root: string, path: string, options: autoIndexOptions | undefined) {
-		this.htmlPage = '<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{{title}}</title></head><body><h1>{{title}}</h1><hr/><table>{{content}}</table><hr/></body><style type="text/css">html{font-family:Arial,Helvetica,sans-serif}table{font-family:\'Courier New\',Courier,monospace;font-size:12px;font-weight:400;letter-spacing:normal;line-height:normal;font-style:normal}tr td:first-child{min-width:20%}td a{margin-right:1em}td.date{text-align:end}</style></html>';
+		this.isProduction = (process.env.NODE_ENV !== undefined && process.env.NODE_ENV === 'production');
+		this.htmlPage = ' <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{{title}}</title></head><body><h1>{{title}}</h1><hr/><table>{{content}}</table><hr/></body><style type="text/css">html{font-family:Arial,Helvetica,sans-serif}table{font-family:\'Courier New\',Courier,monospace;font-size:12px;font-weight:400;letter-spacing:normal;line-height:normal;font-style:normal}tr td:first-child{min-width:20%}td a{margin-right:1em}td.date{text-align:end}</style></html>';
 		this.month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 		this.savePage = [];
 		this.savePageDeadline = 300000; /// 5 * 60 * 1000 => 5min
@@ -51,12 +53,58 @@ class autoindex {
 			throw new Error(`path '${this.path}' not start with /`);
 	}
 
-	error(e: NodeJS.ErrnoException | number) {
-		if (typeof e === 'number') 
-			return new Error(STATUS_CODES[e]);
-		return new Error(e.code === 'ENAMETOOLONG'
-			? STATUS_CODES[414]
-			: STATUS_CODES[404]);
+	private formatError(e: NodeJS.ErrnoException, message?: string) {
+		let ret = message ?? '';
+		if (!this.isProduction) {
+			if (message)
+				ret += '\n→ ';
+			ret += `(${e.message})`;
+		}
+		return ret;
+	}
+
+	error(e: NodeJS.ErrnoException | number, res: Response) {
+		res.status(500);
+		if (typeof e !== 'number') {
+			switch (e.code) {
+			case 'EACCES':
+				return new Error(this.formatError(e, 'Permission denied'));
+			case 'EADDRINUSE':
+				return new Error(this.formatError(e, 'Address already in use'));
+			case 'ECONNREFUSED':
+				return new Error(this.formatError(e, 'Connection refused'));
+			case 'ECONNRESET':
+				return new Error(this.formatError(e, 'Connection reset by peer'));
+			case 'EEXIST':
+				return new Error(this.formatError(e, 'File exists'));
+			case 'EISDIR':
+				return new Error(this.formatError(e, 'Is a directory'));
+			case 'EMFILE':
+				return new Error(this.formatError(e, 'Too many open files in system'));
+			case 'EPIPE':
+				return new Error(this.formatError(e, 'Broken pipe'));
+			case 'EPERM':
+				res.status(403);
+				return new Error(this.formatError(e, 'Operation not permitted'));
+			case 'ENOENT':
+				res.status(404);
+				return new Error(this.formatError(e, 'No such file or directory'));
+			case 'ENOTDIR':
+				res.status(404);
+				return new Error(this.formatError(e, 'Not a directory'));
+			case 'ETIMEDOUT':
+				res.status(408);
+				return new Error(this.formatError(e, STATUS_CODES[408]));
+			case 'ENAMETOOLONG':
+				res.status(414);
+				return new Error(this.formatError(e, STATUS_CODES[414]));
+			default:
+				return new Error(this.formatError(e, `System error code ${e.code} not recognized`));
+			}
+		}
+		if (STATUS_CODES[e])
+			res.status(e);
+		return new Error(STATUS_CODES[e] ?? `System error code ${e} not recognized`);
 	}
 
 	parsePath(path: string): string {
@@ -65,7 +113,7 @@ class autoindex {
 			path = path.slice(0, path.length - 1);
 		return path;
 	}
-
+	
 	serve(path: string[], res: Response, next: NextFunction) {
 		const joinPathForSave = path.join('/');
 		if (this.path)
@@ -85,11 +133,16 @@ class autoindex {
 					this.file(data, statOfFile, res);
 				else if (statOfFile.isDirectory())
 					this.directory(data, res, next);
-				else
-					throw new Error(`${data.title} is not a directory or a file`);
+				else {
+					const err: NodeJS.ErrnoException = new Error(`ENOENT: no such file or directory, stat '${data.serverPath}'`);
+					err.code = 'ENOENT';
+					err.syscall = 'stat';
+					err.errno = -4058;
+					throw err;
+				}
 			})
 			.catch((e) => {
-				next(this.error(e));
+				next(this.error(e, res));
 			});
 	}
 
@@ -159,9 +212,11 @@ class autoindex {
 		readdir(data.serverPath, { encoding: 'utf-8', withFileTypes: true })
 			.then(async (dirs) => {
 				for (const el of dirs) {
-					if ((!el.isDirectory() && !el.isFile())
+					if (
+						(!el.isDirectory() && !el.isFile())
 							|| (!this.options.displayDotfile && el.name.charAt(0) === '.')
-							|| (this.options.exclude && this.options.exclude.test(el.name)))
+							|| (this.options.exclude && this.options.exclude.test(el.name))
+					)
 						continue;
 					const _stat = await stat(resolve(data.serverPath, el.name));
 					elements.push({
@@ -238,7 +293,7 @@ class autoindex {
 				return this.send(html, res);
 			})
 			.catch((e) => {
-				next(this.error(e));
+				next(this.error(e, res));
 			});
 	}
 }
@@ -267,7 +322,7 @@ export default (root: string, options: autoIndexOptions | undefined = undefined)
 		const splitPath = newPath.split('/').filter((el) => el.length);
 		
 		if (instance.path && splitPath.length > 0 && splitPath[0] !== instance.path.slice(1))
-			return next(instance.error(400));
+			return next(instance.error(400, res));
 		instance.serve(splitPath, res, next);
 	};
 };
