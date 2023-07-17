@@ -27,7 +27,7 @@ yarn add express-autoindex
 
 ## API
 
-```js
+```ts
 import autoindex from 'express-autoindex';
 
 // Root of server, ./public dir
@@ -35,6 +35,9 @@ app.use(autoindex('public'))
 
 // Specific path `/files`, ./public dir
 app.use('/files', autoindex('public'));
+
+// Set options
+app.use('/files', autoindex('public', { dirAtTop: false, displaySize: false }));
 ```
 
 ### autoindex(path, options)
@@ -103,6 +106,51 @@ with a `path` of `'public'` will look at `'public/some/dir'`
 	
   **Default** to `true`
 
+## Error handling
+
+`express-autoindex` will do its best to handle Node.js errors correctly by converting them into a valid HTTP error. The default error type is **500**.
+
+In no case `express-autoindex` handles custom error pages. The only thing done is to modify the statusCode of the `res` object and generate an error if necessary.
+
+### NodeJS error code list
+
+Below is a list of currently supported errors.
+
+This is how to read the list: *The Node error code* → (**the related HTTP code**) "The error message"
+
+- *EACCES* → (**500**) Permission denied
+- *EADDRINUSE* → (**500**) Address already in use
+- *ECONNREFUSED* → (**500**) Connection refused
+- *ECONNRESET* → (**500**) Connection reset by peer
+- *EEXIST* → (**500**) File exists
+- *EISDIR* → (**500**) Is a directory
+- *EMFILE* → (**500**) Too many open files in system
+- *ENAMETOOLONG* → (**414**) URI Too Long
+- *ENOENT* → (**404**) No such file or directory
+- *ENOTDIR* → (**404**) Not a directory
+- *EPERM* → (**403**) Operation not permitted
+- *EPIPE* → (**500**) Broken pipe
+- *ETIMEDOUT* → (**408**) Request Timeout
+
+### Example code
+
+To handle these errors, all you need to do after calling this middleware is to use a code of this type:
+
+```ts
+[...]
+app.use('/public', autoindex('/files'));
+app.use((err, _req, res, next) => {
+	log.error(err);
+	if (res.statusCode === 404) {
+		const ret = { error: 'A 404 error', code: res.statusCode };
+		res.setHeader('Content-Length', Buffer.byteLength(JSON.stringify(ret)));
+		res.json(ret);
+	}
+	next();
+});
+[...]
+```
+
 ## Minimalist example
 
 ```ts
@@ -120,6 +168,10 @@ app.listen(PORT, (): void => {
 	console.log(`server is running at ${PORT}`);
 });
 ```
+
+## Production mode
+
+When the variable `process.env.NODE_ENV` is set to **production**, error messages are much less detailed for security reasons.
 
 ## To do list
 

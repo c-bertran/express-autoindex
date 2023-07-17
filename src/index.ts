@@ -8,8 +8,9 @@ import type { Stats } from 'fs';
 import type { Request, Response, NextFunction } from 'express';
 import type { autoIndexOptions, statFile, serveConfig, save } from './interface';
 
-class autoindex {
+class Autoindex {
 	private isProduction: boolean;
+	private errorCode: Map<string, { message: string, httpCode?: number }>;
 	private htmlPage: string;
 	private month: string[];
 	private savePage: save[];
@@ -21,6 +22,22 @@ class autoindex {
 
 	constructor(root: string, path: string, options: autoIndexOptions | undefined) {
 		this.isProduction = (process.env.NODE_ENV !== undefined && process.env.NODE_ENV === 'production');
+		this.errorCode = new Map([
+			['EACCES', { message: 'Permission denied' }],
+			['EADDRINUSE', { message: 'Address already in use' }],
+			['ECONNREFUSED', { message: 'Connection refused' }],
+			['ECONNRESET', { message: 'Connection reset by peer' }],
+			['EEXIST', { message: 'File exists' }],
+			['EISDIR', { message: 'Is a directory' }],
+			['EMFILE', { message: 'Too many open files in system' }],
+			['ENAMETOOLONG', { message: STATUS_CODES[414] as string, httpCode: 414 }],
+			['ENOENT', { message: 'No such file or directory', httpCode: 404 }],
+			['ENOTDIR', { message: 'Not a directory', httpCode: 404 }],
+			['EPERM', { message: 'Operation not permitted', httpCode: 403 }],
+			['EPIPE', { message: 'Broken pipe' }],
+			['ETIMEDOUT', { message: STATUS_CODES[408] as string, httpCode: 408 }]
+		]);
+
 		this.htmlPage = ' <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{{title}}</title></head><body><h1>{{title}}</h1><hr/><table>{{content}}</table><hr/></body><style type="text/css">html{font-family:Arial,Helvetica,sans-serif}table{font-family:\'Courier New\',Courier,monospace;font-size:12px;font-weight:400;letter-spacing:normal;line-height:normal;font-style:normal}tr td:first-child{min-width:20%}td a{margin-right:1em}td.date{text-align:end}</style></html>';
 		this.month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 		this.savePage = [];
@@ -65,46 +82,17 @@ class autoindex {
 
 	error(e: NodeJS.ErrnoException | number, res: Response) {
 		res.status(500);
-		if (typeof e !== 'number') {
-			switch (e.code) {
-			case 'EACCES':
-				return new Error(this.formatError(e, 'Permission denied'));
-			case 'EADDRINUSE':
-				return new Error(this.formatError(e, 'Address already in use'));
-			case 'ECONNREFUSED':
-				return new Error(this.formatError(e, 'Connection refused'));
-			case 'ECONNRESET':
-				return new Error(this.formatError(e, 'Connection reset by peer'));
-			case 'EEXIST':
-				return new Error(this.formatError(e, 'File exists'));
-			case 'EISDIR':
-				return new Error(this.formatError(e, 'Is a directory'));
-			case 'EMFILE':
-				return new Error(this.formatError(e, 'Too many open files in system'));
-			case 'EPIPE':
-				return new Error(this.formatError(e, 'Broken pipe'));
-			case 'EPERM':
-				res.status(403);
-				return new Error(this.formatError(e, 'Operation not permitted'));
-			case 'ENOENT':
-				res.status(404);
-				return new Error(this.formatError(e, 'No such file or directory'));
-			case 'ENOTDIR':
-				res.status(404);
-				return new Error(this.formatError(e, 'Not a directory'));
-			case 'ETIMEDOUT':
-				res.status(408);
-				return new Error(this.formatError(e, STATUS_CODES[408]));
-			case 'ENAMETOOLONG':
-				res.status(414);
-				return new Error(this.formatError(e, STATUS_CODES[414]));
-			default:
-				return new Error(this.formatError(e, `System error code ${e.code} not recognized`));
-			}
+		if (typeof e === 'number') {
+			if (STATUS_CODES[e])
+				res.status(e);
+			return new Error(STATUS_CODES[e] ?? `System error code ${e} not recognized`);
 		}
-		if (STATUS_CODES[e])
-			res.status(e);
-		return new Error(STATUS_CODES[e] ?? `System error code ${e} not recognized`);
+		const error = this.errorCode.get(e.code ?? '__DEFAULT__');
+		if (!error)
+			return new Error(this.formatError(e, 'System error not recognized'));
+		if (error.httpCode)
+			res.status(error.httpCode);
+		return new Error(this.formatError(e, error.message));
 	}
 
 	parsePath(path: string): string {
@@ -305,11 +293,11 @@ class autoindex {
  * @param {autoIndexOptions | undefined} options middleware options
  */
 export default (root: string, options: autoIndexOptions | undefined = undefined): (req: Request, res: Response, next: NextFunction) => void => {
-	let instance: autoindex | undefined = undefined;
+	let instance: Autoindex | undefined = undefined;
 
 	return function(req: Request, res: Response, next: NextFunction) {
 		if (instance === undefined)
-			instance = new autoindex(root, req.baseUrl, options);
+			instance = new Autoindex(root, req.baseUrl, options);
 		if (instance.options.strict && req.method !== 'GET' && req.method !== 'HEAD') {
 			res.status(405);
 			res.setHeader('Allow', 'GET, HEAD');
