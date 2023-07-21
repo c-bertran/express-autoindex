@@ -12,7 +12,7 @@ The objectives are:
 * The `lightest` possible
 
 <p align="center">
-	<img width="500" alt="Exemple image" src="./src/img.png"/>
+	<img width="500" alt="Example image" src="./md/img.png"/>
 </p>
 
 ## Install
@@ -175,12 +175,11 @@ import type { Application, NextFunction, Request, Response } from 'express';
 const app: Application = express();
 const PORT = process.env.PORT || 3000;
 
+app.disable('x-powered-by');
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use('/public', autoindex('public', { cache: 900000 /* 15 min */ }));
-app.listen(PORT, (): void => {
-	console.log(`server is running at ${PORT}`);
-});
+app.use('/public', autoindex('public'));
+app.listen(PORT, (): void => console.log(`server is running at ${PORT}`));
 ```
 
 ## Production mode
