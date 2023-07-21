@@ -1,5 +1,5 @@
 import { STATUS_CODES } from 'http';
-import { accessSync, constants, createReadStream, statSync } from 'fs';
+import { accessSync, constants, createReadStream, readFileSync, statSync } from 'fs';
 import { readdir, stat } from 'fs/promises';
 import { posix, resolve } from 'path';
 import * as mime from 'mime';
@@ -24,12 +24,12 @@ class Autoindex {
 	constructor(root: string, path: string, options: autoIndexOptions | undefined) {
 		this.isProduction = (process.env.NODE_ENV !== undefined && process.env.NODE_ENV === 'production');
 		this.errorCode = errorsMap();
-		this.htmlPage = ' <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{{title}}</title></head><body><h1>{{title}}</h1><hr/><table>{{content}}</table><hr/></body><style type="text/css">html{font-family:Arial,Helvetica,sans-serif}table{font-family:\'Courier New\',Courier,monospace;font-size:12px;font-weight:400;letter-spacing:normal;line-height:normal;font-style:normal}tr td:first-child{min-width:20%}td a{margin-right:1em}td.date{text-align:end}</style></html>';
+		this.htmlPage = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{{title}}</title></head><body><h1>{{title}}</h1><hr/><table>{{content}}</table><hr/></body><style type="text/css">html{font-family:Arial,Helvetica,sans-serif}table{font-family:\'Courier New\',Courier,monospace;font-size:12px;font-weight:400;letter-spacing:normal;line-height:normal;font-style:normal}tr td:first-child{min-width:20%}td a{margin-right:1em}td.size{text-align:end}</style></html>';
 		this.month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 		this.savePage = [];
 		this.savePageDeadline = 300000; /// 5 * 60 * 1000 => 5min
-		
 		this.options = {
+			alwaysThrowError: options?.alwaysThrowError ?? false,
 			cache: options?.cache,
 			dirAtTop: options?.dirAtTop ?? true,
 			displayDate: options?.displayDate ?? true,
@@ -43,6 +43,15 @@ class Autoindex {
 			? path
 			: undefined;
 		this.root = root;
+
+		if (options?.customTemplate) {
+			const genPath = resolve('.', options.customTemplate);
+			try {
+				this.htmlPage = readFileSync(genPath, { encoding: 'utf-8', flag: 'r' });
+			} catch (e) {
+				throw new Error(`customTemplate path is incorrect: ${genPath}`);
+			}
+		}
 
 		if (this.options?.cache && typeof this.options.cache !== 'boolean')
 			this.savePageDeadline = this.options.cache;
@@ -66,17 +75,28 @@ class Autoindex {
 		return ret;
 	}
 
+	private throwError(code: number) {
+		if (this.options.alwaysThrowError)
+			return true;
+		return code >= 500;
+	}
+
 	error(e: NodeJS.ErrnoException | number, res: Response) {
 		if (typeof e === 'number') {
 			if (STATUS_CODES[e])
 				res.status(e);
-			return new Error(STATUS_CODES[e] ?? `System error code ${e} not recognized`);
+			return (this.throwError(e))
+				? new Error(STATUS_CODES[e] ?? `System error code ${e} not recognized`)
+				: undefined;
 		}
 		const error = this.errorCode.get(e.code ?? '__DEFAULT__');
-		if (!error)
-			return new Error(this.formatError(e, 'System error not recognized'));
-		res.status(error.httpCode);
-		return new Error(this.formatError(e, error.message));
+		if (error) {
+			res.status(error.httpCode);
+			return (this.throwError(error.httpCode))
+				? new Error(this.formatError(e, error.message))
+				: undefined;
+		}
+		return new Error(this.formatError(e, `System error code ${e} not recognized`));
 	}
 
 	parsePath(path: string): string {
@@ -165,11 +185,13 @@ class Autoindex {
 	}
 
 	private generateRow(data: statFile): string {
-		let ret = `<tr><td><a href="${data.el.dirent[0]}">${data.el.dirent[1]}</a></td>`;
+		let ret = '<tr>';
+		
+		ret += `<td class="link"><a href="${data.el.dirent[0]}">${data.el.dirent[1]}</a></td>`;
 		if (this.options.displayDate)
-			ret += `<td>${data.el.time}</td>`;
+			ret += `<td class="time">${data.el.time}</td>`;
 		if (this.options.displaySize)
-			ret += `<td class="date">${data.el.size}</td>`;
+			ret += `<td class="size">${data.el.size}</td>`;
 		ret += '</tr>';
 		return ret;
 	}

@@ -4,6 +4,15 @@ export type errorMap = Map<string, { message: string, httpCode: number }>;
 
 export interface autoIndexOptions {
 	/**
+	 * Throw error for all HTTP error codes (**4xx** & **5xx**)
+	 * 
+	 *  By default, errors will be generated only on **5xx** types. If you wish to generate an error regardless of the HTTP error code, pass `true` to the option
+	 * 
+	 * * Default to `false`
+	 */
+	alwaysThrowError?: boolean;
+	
+	/**
 	 * Caches for a defined time the generated pages. Very useful to save server resources
 	 * 
 	 * Pass `false` to disable the cache, or the number of milliseconds representing the cache expiration time
@@ -11,6 +20,15 @@ export interface autoIndexOptions {
 	 * Default to `300000` => 5 mins
 	 */
 	cache?: number | false;
+
+	/**
+	 * Pass custom page template
+	 * 
+	 * Pass the relative path of your custom template file. For example, if the file is located in the same folder of your startup server file, simply write `my-file.html` or `./my-file.html`
+	 * 
+	 * Default to `undefined`
+	 */
+	customTemplate?: string;
 	
 	/**
 	 * Display directories before files
