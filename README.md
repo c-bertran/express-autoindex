@@ -44,7 +44,7 @@ app.use('/files', autoindex('public', { dirAtTop: false, displaySize: false }));
 
 Returns middlware that serves an index of the directory in the given `path`.
 
-The `path` is based off the `req.url` value, so a `req.url` of `'/some/dir`
+The `path` is based of the `req.url` value, so a `req.url` of `'/some/dir`
 with a `path` of `'public'` will look at `'public/some/dir'`
 
 ### Options
@@ -118,6 +118,18 @@ Below is a list of currently supported errors.
 
 This is how to read the list: *The Node error code* → (**the related HTTP code**) "The error message"
 
+- *EBADF* → (**500**) fd is not a valid open file descriptor
+- *EFAULT* → (**500**) Bad address
+- *EINVAL* → (**500**) Invalid flag specified in flag
+- *ELOOP* → (**500**) Too many symbolic links encountered while traversing the path
+- *ENOMEM* → (**500**) Out of memory
+- *EOVERFLOW* → (**500**)	pathname or fd refers to a file whose size, inode number,
+	</br>
+	or number of blocks cannot be represented in, respectively, the types off_t, ino_t, or blkcnt_t.
+	</br>
+	This error can occur when, for example, an application compiled on a 32-bit platform
+	</br>
+	without -D_FILE_OFFSET_BITS=64 calls stat() on a file whose size exceeds (1<<31)-1 bytes
 - *EACCES* → (**500**) Permission denied
 - *EADDRINUSE* → (**500**) Address already in use
 - *ECONNREFUSED* → (**500**) Connection refused
@@ -128,6 +140,8 @@ This is how to read the list: *The Node error code* → (**the related HTTP code
 - *ENAMETOOLONG* → (**414**) URI Too Long
 - *ENOENT* → (**404**) No such file or directory
 - *ENOTDIR* → (**404**) Not a directory
+- *ENOTEMPTY* → (**500**) Directory not empty
+- *ENOTFOUND* → (**500**) DNS lookup failed
 - *EPERM* → (**403**) Operation not permitted
 - *EPIPE* → (**500**) Broken pipe
 - *ETIMEDOUT* → (**408**) Request Timeout
@@ -159,7 +173,7 @@ import autoindex from 'express-autoindex';
 import type { Application, NextFunction, Request, Response } from 'express';
 
 const app: Application = express();
-const PORT = 3000 || process.env.PORT;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());

@@ -3,14 +3,15 @@ import { accessSync, constants, createReadStream, statSync } from 'fs';
 import { readdir, stat } from 'fs/promises';
 import { posix, resolve } from 'path';
 import * as mime from 'mime';
+import errorsMap from './errorsMap';
 
-import type { Stats } from 'fs';
 import type { Request, Response, NextFunction } from 'express';
-import type { autoIndexOptions, statFile, serveConfig, save } from './interface';
+import type { Stats } from 'fs';
+import type { errorMap, autoIndexOptions, statFile, serveConfig, save } from './interface';
 
 class Autoindex {
 	private isProduction: boolean;
-	private errorCode: Map<string, { message: string, httpCode?: number }>;
+	private errorCode: errorMap;
 	private htmlPage: string;
 	private month: string[];
 	private savePage: save[];
@@ -22,22 +23,7 @@ class Autoindex {
 
 	constructor(root: string, path: string, options: autoIndexOptions | undefined) {
 		this.isProduction = (process.env.NODE_ENV !== undefined && process.env.NODE_ENV === 'production');
-		this.errorCode = new Map([
-			['EACCES', { message: 'Permission denied' }],
-			['EADDRINUSE', { message: 'Address already in use' }],
-			['ECONNREFUSED', { message: 'Connection refused' }],
-			['ECONNRESET', { message: 'Connection reset by peer' }],
-			['EEXIST', { message: 'File exists' }],
-			['EISDIR', { message: 'Is a directory' }],
-			['EMFILE', { message: 'Too many open files in system' }],
-			['ENAMETOOLONG', { message: STATUS_CODES[414] as string, httpCode: 414 }],
-			['ENOENT', { message: 'No such file or directory', httpCode: 404 }],
-			['ENOTDIR', { message: 'Not a directory', httpCode: 404 }],
-			['EPERM', { message: 'Operation not permitted', httpCode: 403 }],
-			['EPIPE', { message: 'Broken pipe' }],
-			['ETIMEDOUT', { message: STATUS_CODES[408] as string, httpCode: 408 }]
-		]);
-
+		this.errorCode = errorsMap();
 		this.htmlPage = ' <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{{title}}</title></head><body><h1>{{title}}</h1><hr/><table>{{content}}</table><hr/></body><style type="text/css">html{font-family:Arial,Helvetica,sans-serif}table{font-family:\'Courier New\',Courier,monospace;font-size:12px;font-weight:400;letter-spacing:normal;line-height:normal;font-style:normal}tr td:first-child{min-width:20%}td a{margin-right:1em}td.date{text-align:end}</style></html>';
 		this.month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 		this.savePage = [];
@@ -81,7 +67,6 @@ class Autoindex {
 	}
 
 	error(e: NodeJS.ErrnoException | number, res: Response) {
-		res.status(500);
 		if (typeof e === 'number') {
 			if (STATUS_CODES[e])
 				res.status(e);
@@ -90,8 +75,7 @@ class Autoindex {
 		const error = this.errorCode.get(e.code ?? '__DEFAULT__');
 		if (!error)
 			return new Error(this.formatError(e, 'System error not recognized'));
-		if (error.httpCode)
-			res.status(error.httpCode);
+		res.status(error.httpCode);
 		return new Error(this.formatError(e, error.message));
 	}
 

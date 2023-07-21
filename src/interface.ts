@@ -1,5 +1,7 @@
 import type { Dirent } from 'fs';
 
+export type errorMap = Map<string, { message: string, httpCode: number }>;
+
 export interface autoIndexOptions {
 	/**
 	 * Caches for a defined time the generated pages. Very useful to save server resources
