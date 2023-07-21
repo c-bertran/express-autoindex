@@ -2,6 +2,8 @@ import type { Dirent } from 'fs';
 
 export type errorMap = Map<string, { message: string, httpCode: number }>;
 
+export type defaultKeyOfJson = 'isDir' | 'name' | 'path' | 'time' | 'size';
+
 export interface autoIndexOptions {
 	/**
 	 * Throw error for all HTTP error codes (**4xx** & **5xx**)
@@ -22,9 +24,28 @@ export interface autoIndexOptions {
 	cache?: number | false;
 
 	/**
+	 * Custom JSON format
+	 * 
+	 * By default, the json generated for a file or folder follows a precise structure. It is possible to rename or remove the **key** of this object.
+	 * 
+	 * For more details, see `README.md`
+	 * 
+	 * Default to `undefined`
+	 */
+	customJsonFormat?: {
+		isDir?: string,
+		name?: string,
+		path?: string,
+		time?: string,
+		size?: string,
+	};
+
+	/**
 	 * Pass custom page template
 	 * 
-	 * Pass the relative path of your custom template file. For example, if the file is located in the same folder of your startup server file, simply write `my-file.html` or `./my-file.html`
+	 * Pass the relative path of your custom template file. For example, if the file is located in the same folder of your startup server file, simply write `my-file.html` or `./my-file.html`.
+	 * 
+	 * For more details, see `README.md`
 	 * 
 	 * Default to `undefined`
 	 */

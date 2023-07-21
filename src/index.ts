@@ -7,7 +7,14 @@ import errorsMap from './errorsMap';
 
 import type { Request, Response, NextFunction } from 'express';
 import type { Stats } from 'fs';
-import type { errorMap, autoIndexOptions, statFile, serveConfig, save } from './interface';
+import type {
+	autoIndexOptions,
+	defaultKeyOfJson,
+	errorMap,
+	save,
+	serveConfig,
+	statFile
+} from './interface';
 
 class Autoindex {
 	private isProduction: boolean;
@@ -18,6 +25,7 @@ class Autoindex {
 	private savePageDeadline: number;
 	
 	options: autoIndexOptions;
+	jsonOption: Record<defaultKeyOfJson, string>;
 	path: string | undefined;
 	root: string;
 
@@ -28,6 +36,7 @@ class Autoindex {
 		this.month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 		this.savePage = [];
 		this.savePageDeadline = 300000; /// 5 * 60 * 1000 => 5min
+
 		this.options = {
 			alwaysThrowError: options?.alwaysThrowError ?? false,
 			cache: options?.cache,
@@ -39,6 +48,7 @@ class Autoindex {
 			json: options?.json ?? false,
 			strict: options?.strict ?? true
 		};
+		this.jsonOption = options?.customJsonFormat as Record<defaultKeyOfJson, string>;
 		this.path = (path.length)
 			? path
 			: undefined;
@@ -196,6 +206,31 @@ class Autoindex {
 		return ret;
 	}
 
+	private generateJson(element: statFile): Record<string, boolean | string | number> {
+		const isExist = (key: string) => Object.prototype.hasOwnProperty.call(this.jsonOption, key);
+		const ret: Record<defaultKeyOfJson | string, boolean | string | number> = {};
+
+		if (this.jsonOption) {
+			if (isExist('isDir'))
+				ret[this.jsonOption.isDir] = element.dirent.isDirectory();
+			if (isExist('name'))
+				ret[this.jsonOption.name] = element.el.dirent[1];
+			if (isExist('path'))
+				ret[this.jsonOption.path] = element.el.dirent[0];
+			if (isExist('time'))
+				ret[this.jsonOption.time] = element.el.time;
+			if (isExist('size'))
+				ret[this.jsonOption.size] = Number(element.el.size);
+		} else {
+			ret['isDir'] = element.dirent.isDirectory();
+			ret['name'] = element.el.dirent[1];
+			ret['path'] = element.el.dirent[0];
+			ret['time'] = element.el.time;
+			ret['size'] = Number(element.el.size);
+		}
+		return ret;
+	}
+
 	private directory(data: serveConfig, res: Response, next: NextFunction) {
 		const checkSavePage = this.checkSavePage(data.savePath);
 		const elements: statFile[] = [];
@@ -228,15 +263,7 @@ class Autoindex {
 					});
 				}
 				if (this.options.json) {
-					const ret = elements.map((d) => {
-						return {
-							isDir: d.dirent.isDirectory(),
-							name: d.el.dirent[1],
-							path: d.el.dirent[0],
-							time: d.el.time,
-							size: d.el.size
-						};
-					});
+					const ret = elements.map((e) => this.generateJson(e));
 					if (this.options.cache !== undefined) {
 						this.savePage.push({
 							json: true,
