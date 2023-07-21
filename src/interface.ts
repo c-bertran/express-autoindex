@@ -52,6 +52,15 @@ export interface autoIndexOptions {
 	customTemplate?: string;
 	
 	/**
+	 * Custom date print format
+	 * 
+	 * For more details, see `README.md`
+	 * 
+	 * Default to `undefined`
+	 */
+	dateFormat?: string;
+
+	/**
 	 * Display directories before files
 	 *
 	 * Default to `false`

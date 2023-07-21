@@ -23,6 +23,7 @@ class Autoindex {
 	private month: string[];
 	private savePage: save[];
 	private savePageDeadline: number;
+	private dateFormat: Map<string, (d: Date) => string>;
 	
 	options: autoIndexOptions;
 	jsonOption: Record<defaultKeyOfJson, string>;
@@ -36,10 +37,39 @@ class Autoindex {
 		this.month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 		this.savePage = [];
 		this.savePageDeadline = 300000; /// 5 * 60 * 1000 => 5min
+		this.dateFormat = new Map([
+			[
+				'%d',
+				(d: Date) => (d.getUTCDay() > 0)
+					? this.timePad(d.getUTCDay())
+					: ''
+			],
+			[
+				'%mo',
+				(d: Date) => this.month[d.getUTCMonth()]
+			],
+			[
+				'%y',
+				(d: Date) => d.getUTCFullYear().toString()
+			],
+			[
+				'%h',
+				(d: Date) => this.timePad(d.getUTCHours())
+			],
+			[
+				'%mi',
+				(d: Date) => this.timePad(d.getUTCMinutes())
+			],
+			[
+				'%s',
+				(d: Date) => this.timePad(d.getUTCSeconds())
+			]
+		]);
 
 		this.options = {
 			alwaysThrowError: options?.alwaysThrowError ?? false,
 			cache: options?.cache,
+			dateFormat: options?.dateFormat ?? '%d?-%mo-%y %h:%mi',
 			dirAtTop: options?.dirAtTop ?? true,
 			displayDate: options?.displayDate ?? true,
 			displayDotfile: options?.displayDotfile ?? false,
@@ -186,20 +216,40 @@ class Autoindex {
 		return String(n); 
 	}
 
+	private splice(s: string, start: number, deleteCount: number) {
+		const temp = [ ...s ];
+		temp.splice(start, deleteCount);
+		return temp.join('');
+	}
+
 	private genTime(_stat: Stats): string {
-		let ret = '';
-		if (_stat.mtime.getUTCDay() > 0)
-			ret += `${this.timePad(_stat.mtime.getUTCDay())}-`;
-		ret += `${this.month[_stat.mtime.getUTCMonth()]}-${_stat.mtime.getUTCFullYear()} ${this.timePad(_stat.mtime.getUTCHours())}:${this.timePad(_stat.mtime.getUTCMinutes())}`;
+		let ret = this.options.dateFormat as string;
+
+		for (const item of this.dateFormat) {
+			const index = ret.indexOf(item[0]);
+			if (index > -1) {
+				const funcRet = item[1](_stat.mtime);
+				const i = index + item[0].length;
+				if (!funcRet || funcRet.length <= 0) {
+					if (ret.charAt(i) === '?')
+						ret = this.splice(ret, i, 2);
+					ret = ret.replace(item[0], '');
+				} else {
+					if (ret.charAt(i) === '?')
+						ret = this.splice(ret, i, 1);
+					ret = ret.replace(item[0], funcRet);
+				}
+			}
+		}
 		return ret;
 	}
 
 	private generateRow(data: statFile): string {
 		let ret = '<tr>';
-		
 		ret += `<td class="link"><a href="${data.el.dirent[0]}">${data.el.dirent[1]}</a></td>`;
 		if (this.options.displayDate)
-			ret += `<td class="time">${data.el.time}</td>`;
+			// eslint-disable-next-line no-control-regex
+			ret += `<td class="time">${data.el.time.replace(/[\x26\x0A<>'"]/g, (e) => `&#${e.charCodeAt(0)};`)}</td>`; 
 		if (this.options.displaySize)
 			ret += `<td class="size">${data.el.size}</td>`;
 		ret += '</tr>';
