@@ -2,7 +2,14 @@ import typescript from '@rollup/plugin-typescript';
 import terser from '@rollup/plugin-terser';
 
 export default {
-	external: ['http', 'fs', 'fs/promises', 'path', 'mime'],
+	external: [
+		'chardet',
+		'http',
+		'fs',
+		'fs/promises',
+		'path',
+		'mime'
+	],
 	input: 'src/index.ts',
 	output: [
 		{

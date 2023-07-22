@@ -1,6 +1,7 @@
+import chardet from 'chardet';
 import { STATUS_CODES } from 'http';
-import { accessSync, constants, createReadStream, readFileSync, statSync } from 'fs';
-import { readdir, stat } from 'fs/promises';
+import { accessSync, constants, readFileSync, statSync } from 'fs';
+import { readFile, readdir, stat } from 'fs/promises';
 import { posix, resolve } from 'path';
 import * as mime from 'mime';
 import errorsMap from './errorsMap';
@@ -162,7 +163,7 @@ class Autoindex {
 		stat(data.serverPath)
 			.then((statOfFile) => {
 				if (statOfFile.isFile())
-					this.file(data, statOfFile, res);
+					this.file(data, statOfFile, res, next);
 				else if (statOfFile.isDirectory())
 					this.directory(data, res, next);
 				else {
@@ -173,9 +174,7 @@ class Autoindex {
 					throw err;
 				}
 			})
-			.catch((e) => {
-				next(this.error(e, res));
-			});
+			.catch((e) => next(this.error(e, res)));
 	}
 
 	private send(data: string | Record<string, any>, res: Response) {
@@ -188,12 +187,22 @@ class Autoindex {
 		res.json(data);
 	}
 
-	private file(data: serveConfig, stat: Stats, res: Response) {
-		const mimeType = mime.getType(data.serverPath) ?? 'application/octet-stream';
-		res.setHeader('Content-Length', stat.size);
-		res.setHeader('Content-Type', mimeType);
-		res.writeHead(200);
-		createReadStream(data.serverPath).pipe(res);
+	private file(data: serveConfig, stat: Stats, res: Response, next: NextFunction) {
+		readFile(data.serverPath, { flag: 'r' })
+			.then(async (buffer) => {
+				const mimeType = mime.getType(data.serverPath) ?? 'application/octet-stream';
+				const encoding = chardet.detect(buffer);
+
+				if (encoding)
+					res.setHeader('Content-Type', `${mimeType}; charset=${encoding}`);
+				else
+					res.setHeader('Content-Type', `${mimeType}; charset=UTF-8`);
+				res.setHeader('Content-Length', stat.size);
+				res.writeHead(200);
+				res.write(buffer, 'binary');
+				res.end(null, 'binary');
+			})
+			.catch((e) => next(this.error(e, res)));
 	}
 
 	private checkSavePage(path: string): save | undefined {
@@ -363,9 +372,7 @@ class Autoindex {
 				}
 				return this.send(html, res);
 			})
-			.catch((e) => {
-				next(this.error(e, res));
-			});
+			.catch((e) => next(this.error(e, res)));
 	}
 }
 

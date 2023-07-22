@@ -48,6 +48,7 @@
 		"watch": "rollup -w --bundleConfigAsCjs --config rollup.config.js"
 	},
 	"dependencies": {
+		"chardet": "^1.6.0",
 		"mime": "^3.0.0"
 	},
 	"devDependencies": {
