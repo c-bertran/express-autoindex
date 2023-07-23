@@ -7,8 +7,9 @@ It takes into consideration most of the mime-types correctly, and page generatio
 The objectives are:
 * Make a `HTML` page or `JSON` data easily usable, on the great majority of browsers
 * Correctly take into consideration the majority of `MIME types`, and the generation of the most customizable pages possible
+* Supports most common file encodings
 * Native support for `Typescript`, `EcmaScript` and `CommonJS`
-* The least amount of dependency possible (currently only `one`)
+* The least amount of dependency possible (currently only `two`)
 * The `lightest` possible
 
 <p align="center">
@@ -35,7 +36,7 @@ The objectives are:
 - [Production mode](#production-mode)
 - [To do list](#to-do-list)
 - [License](#license)
-- [Dependencie](#dependencie)
+- [Dependencies](#dependencies)
 
 ## Install
 
@@ -462,6 +463,8 @@ When the variable `process.env.NODE_ENV` is set to **production**, error message
 
 [MIT](LICENSE)
 
-## Dependencie
+## Dependencies
+
+[chardet](https://www.npmjs.com/package/chardet)
 
 [mime](https://www.npmjs.com/package/mime)

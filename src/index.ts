@@ -147,16 +147,21 @@ class Autoindex {
 		return path;
 	}
 	
-	serve(path: string[], res: Response, next: NextFunction) {
-		const joinPathForSave = path.join('/');
-		if (this.path)
-			path.shift();
+	serve(path: string, res: Response, next: NextFunction) {
+		const cleanStr = (s: string) => s.at(0) === '/'
+			? s.slice(1)
+			: s;
+		const cleanPath = (this.path)
+			? cleanStr(path).replace(cleanStr(this.path), '')
+			: cleanStr(path);
+		const cleanPathSplit = cleanPath.split('/').filter((e) => e.length);
+
 		const data: serveConfig = {
 			path,
-			savePath: joinPathForSave,
-			serverPath: resolve(this.root, ...path),
-			title: (joinPathForSave.length)
-				? `/${joinPathForSave}/`
+			savePath: cleanPath,
+			serverPath: resolve(this.root, ...cleanPathSplit),
+			title: (cleanStr(cleanPath).length)
+				? `/${cleanStr(cleanPath)}/`
 				: '/'
 		};
 		
@@ -189,7 +194,7 @@ class Autoindex {
 
 	private file(data: serveConfig, stat: Stats, res: Response, next: NextFunction) {
 		readFile(data.serverPath, { flag: 'r' })
-			.then(async (buffer) => {
+			.then((buffer) => {
 				const mimeType = mime.getType(data.serverPath) ?? 'application/octet-stream';
 				const encoding = chardet.detect(buffer);
 
@@ -209,7 +214,9 @@ class Autoindex {
 		const currentTime = new Date().getTime();
 
 		for (const x in this.savePage) {
+			console.log('one', path, this.savePage[x].path);
 			if (path === this.savePage[x].path) {
+				console.log('one');
 				if (this.savePage[x].deadline.getTime() >= currentTime)
 					return this.savePage[x];
 				else
@@ -293,7 +300,8 @@ class Autoindex {
 	private directory(data: serveConfig, res: Response, next: NextFunction) {
 		const checkSavePage = this.checkSavePage(data.savePath);
 		const elements: statFile[] = [];
-		let content = '';
+		const genFiles: string[] = [], genDirs: string[] = [], htmlContent: string[] = [];
+		let dataReturn: string | Record<string, any>;
 		
 		if (this.options.cache !== undefined && checkSavePage)
 			return this.send(checkSavePage.data, res);
@@ -301,19 +309,26 @@ class Autoindex {
 			.then(async (dirs) => {
 				for (const el of dirs) {
 					if (
-						(!el.isDirectory() && !el.isFile())
-							|| (!this.options.displayDotfile && el.name.charAt(0) === '.')
-							|| (this.options.exclude && this.options.exclude.test(el.name))
+						(!el.isDirectory() && !el.isFile()) ||
+						(!this.options.displayDotfile && el.name.charAt(0) === '.') ||
+						(this.options.exclude && this.options.exclude.test(el.name))
 					)
 						continue;
 					const _stat = await stat(resolve(data.serverPath, el.name));
+
 					elements.push({
 						dirent: el,
 						el: {
-							dirent: [`${data.title}${el.name}`, `${el.name}${(el.isDirectory())
-								? '/'
-								: ''
-							}`],
+							dirent: [
+								`${(this.path)
+									? this.parsePath(`${this.path}${data.title}${el.name}`)
+									: this.parsePath(this.path as string)
+								}`,
+								`${el.name}${(el.isDirectory())
+									? '/'
+									: ''
+								}`
+							],
 							time: this.genTime(_stat),
 							size: (el.isFile())
 								? String(_stat.size)
@@ -321,56 +336,38 @@ class Autoindex {
 						}
 					});
 				}
-				if (this.options.json) {
-					const ret = elements.map((e) => this.generateJson(e));
-					if (this.options.cache !== undefined) {
-						this.savePage.push({
-							json: true,
-							data: ret,
-							deadline: new Date(new Date().getTime() + this.savePageDeadline),
-							path: data.savePath
-						});
+
+				if (this.options.json)
+					dataReturn = elements.map((e) => this.generateJson(e));
+				else {
+					if (data.title.localeCompare('/') !== 0)
+						htmlContent.push(`<tr><td><a href="${data.path.replace(/[^/]+$/, '')}">../</a></td></tr>`);
+					for (const el of elements) {
+						if (this.options.dirAtTop) {
+							if (el.dirent.isDirectory())
+								genDirs.push(this.generateRow(el));
+							else if (el.dirent.isFile())
+								genFiles.push(this.generateRow(el));
+						} else
+							htmlContent.push(this.generateRow(el));
 					}
-					return this.send(ret, res);
+					if (this.options.dirAtTop)
+						htmlContent.push(...[ ...genDirs, ...genFiles ]);
+					dataReturn = this.htmlPage
+						.replaceAll(/{{\s?title\s?}}/g, `Index of ${data.title}`)
+						.replaceAll(/{{\s?content\s?}}/g, htmlContent.join(''));
 				}
 
-				if (data.path.length) {
-					let url = '';
-					const __base = /\/[^/]+\/$/g.exec(data.title);
-					if (__base && __base.length)
-						url = data.title.replace(__base[0], '');
-					else
-						url = data.title;
-					if (!this.path && data.path.length === 1)
-						url = '/';
-					content += `<tr><td><a href="${url}">../</a></td></tr>`;
-				}
-
-				if (this.options.dirAtTop) {
-					for (const dir of elements) {
-						if (dir.dirent.isDirectory())
-							content += this.generateRow(dir);
-					}
-					for (const file of elements) {
-						if (file.dirent.isFile())
-							content += this.generateRow(file);
-					}
-				} else {
-					for (const el of elements)
-						content += this.generateRow(el);
-				}
-				const html = this.htmlPage
-					.replaceAll(/{{\s?title\s?}}/g, `Index of ${data.title}`)
-					.replaceAll(/{{\s?content\s?}}/g, content);
 				if (this.options.cache !== undefined) {
 					this.savePage.push({
-						json: false,
-						data: html,
+						json: this.options.json ?? false,
+						data: dataReturn,
 						deadline: new Date(new Date().getTime() + this.savePageDeadline),
 						path: data.savePath
 					});
 				}
-				return this.send(html, res);
+
+				return this.send(dataReturn, res);
 			})
 			.catch((e) => next(this.error(e, res)));
 	}
@@ -382,10 +379,12 @@ class Autoindex {
  * @param {string} root path to the public directory
  * @param {autoIndexOptions | undefined} options middleware options
  */
-export default (root: string, options: autoIndexOptions | undefined = undefined): (req: Request, res: Response, next: NextFunction) => void => {
+export default (root: string, options: autoIndexOptions | undefined = undefined): (
+	(req: Request, res: Response, next: NextFunction) => void
+) => {
 	let instance: Autoindex | undefined = undefined;
 
-	return function(req: Request, res: Response, next: NextFunction) {
+	return (req: Request, res: Response, next: NextFunction) => {
 		if (instance === undefined)
 			instance = new Autoindex(root, req.baseUrl, options);
 		if (instance.options.strict && req.method !== 'GET' && req.method !== 'HEAD') {
@@ -397,10 +396,9 @@ export default (root: string, options: autoIndexOptions | undefined = undefined)
 		const newPath = (instance.path)
 			? instance.parsePath(`${instance.path}/${req.path}`)
 			: instance.parsePath(req.path);
-		const splitPath = newPath.split('/').filter((el) => el.length);
-		
-		if (instance.path && splitPath.length > 0 && splitPath[0] !== instance.path.slice(1))
-			return next(instance.error(400, res));
-		instance.serve(splitPath, res, next);
+		if (instance.path && !newPath.length)
+			next(instance.error(400, res));
+		else
+			instance.serve(newPath, res, next);
 	};
 };

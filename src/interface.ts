@@ -118,7 +118,7 @@ export interface statFile {
 }
 
 export interface serveConfig {
-	path: string[];
+	path: string;
 	savePath: string;
 	serverPath: string;
 	title: string;
