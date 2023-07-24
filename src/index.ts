@@ -1,8 +1,9 @@
 import chardet from 'chardet';
 import { STATUS_CODES } from 'http';
-import { accessSync, constants, readFileSync, statSync } from 'fs';
-import { readFile, readdir, stat } from 'fs/promises';
-import { posix, resolve } from 'path';
+import { accessSync, constants, createReadStream, readFileSync, statSync } from 'fs';
+import { readdir, stat } from 'fs/promises';
+import { posix, resolve, win32 } from 'path';
+import { platform } from 'os';
 import * as mime from 'mime';
 import errorsMap from './errorsMap';
 
@@ -159,9 +160,13 @@ class Autoindex {
 		const data: serveConfig = {
 			path,
 			savePath: cleanPath,
-			serverPath: resolve(this.root, ...cleanPathSplit),
+			serverPath: decodeURI(
+				platform() === 'win32'
+					? win32.normalize(win32.resolve(this.root, ...cleanPathSplit))
+					: posix.normalize(posix.resolve(this.root, ...cleanPathSplit))
+			),
 			title: (cleanStr(cleanPath).length)
-				? `/${cleanStr(cleanPath)}/`
+				? `/${decodeURI(cleanStr(cleanPath))}/`
 				: '/'
 		};
 		
@@ -192,20 +197,21 @@ class Autoindex {
 		res.json(data);
 	}
 
-	private file(data: serveConfig, stat: Stats, res: Response, next: NextFunction) {
-		readFile(data.serverPath, { flag: 'r' })
-			.then((buffer) => {
-				const mimeType = mime.getType(data.serverPath) ?? 'application/octet-stream';
-				const encoding = chardet.detect(buffer);
+	private dateToHTMLDate(d: Date) {
+		return `${new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(d)}, ${this.timePad(d.getUTCDay() ?? '01')} ${this.month[d.getUTCMonth()]} ${d.getUTCFullYear().toString()} ${this.timePad(d.getUTCHours())}:${this.timePad(d.getUTCMinutes())}:${this.timePad(d.getUTCSeconds())} GMT`;
+	}
 
-				if (encoding)
-					res.setHeader('Content-Type', `${mimeType}; charset=${encoding}`);
-				else
-					res.setHeader('Content-Type', `${mimeType}; charset=UTF-8`);
+	private file(data: serveConfig, stat: Stats, res: Response, next: NextFunction) {
+		const mimeType = mime.getType(data.serverPath) ?? 'application/octet-stream';
+
+		chardet.detectFile(data.serverPath, { sampleSize: 256 })
+			.then((encoding) => {
 				res.setHeader('Content-Length', stat.size);
+				res.setHeader('Content-Type', `${mimeType}; charset=${encoding ?? 'UTF-8'}`);
+				res.setHeader('Last-Modified', this.dateToHTMLDate(stat.mtime));
 				res.writeHead(200);
-				res.write(buffer, 'binary');
-				res.end(null, 'binary');
+				createReadStream(data.serverPath)
+					.pipe(res);
 			})
 			.catch((e) => next(this.error(e, res)));
 	}
@@ -214,9 +220,7 @@ class Autoindex {
 		const currentTime = new Date().getTime();
 
 		for (const x in this.savePage) {
-			console.log('one', path, this.savePage[x].path);
 			if (path === this.savePage[x].path) {
-				console.log('one');
 				if (this.savePage[x].deadline.getTime() >= currentTime)
 					return this.savePage[x];
 				else
@@ -336,7 +340,6 @@ class Autoindex {
 						}
 					});
 				}
-
 				if (this.options.json)
 					dataReturn = elements.map((e) => this.generateJson(e));
 				else {
