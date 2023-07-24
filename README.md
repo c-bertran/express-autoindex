@@ -1,6 +1,6 @@
 # express-autoindex
 
-`express-autoindex` produce a directory listing like Nginx, Apache, etc...
+`express-autoindex` produce a directory listing like Nginx, Apache or another, but just with express
 
 It takes into consideration most of the mime-types correctly, and page generation is fully customizable.
 
