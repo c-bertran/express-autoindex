@@ -1,10 +1,10 @@
 import chardet from 'chardet';
-import { STATUS_CODES } from 'http';
 import { accessSync, constants, createReadStream, readFileSync, statSync } from 'fs';
 import { readdir, stat } from 'fs/promises';
-import { posix, resolve, win32 } from 'path';
-import { platform } from 'os';
+import { STATUS_CODES } from 'http';
 import * as mime from 'mime';
+import { platform } from 'os';
+import { posix, resolve, win32 } from 'path';
 import errorsMap from './errorsMap';
 
 import type { Request, Response, NextFunction } from 'express';
@@ -15,7 +15,8 @@ import type {
 	errorMap,
 	save,
 	serveConfig,
-	statFile
+	statFile,
+	dateRegexGroups
 } from './interface';
 
 class Autoindex {
@@ -25,7 +26,8 @@ class Autoindex {
 	private month: string[];
 	private savePage: save[];
 	private savePageDeadline: number;
-	private dateFormat: Map<string, (d: Date) => string>;
+	private dateFormat: Map<string, (d: Date | dateRegexGroups) => string>;
+	private dateRegexParse: string;
 	
 	options: autoIndexOptions;
 	jsonOption: Record<defaultKeyOfJson, string>;
@@ -41,32 +43,39 @@ class Autoindex {
 		this.savePageDeadline = 300000; /// 5 * 60 * 1000 => 5min
 		this.dateFormat = new Map([
 			[
+				'%wd',
+				(d) => new Intl.DateTimeFormat('en-US', { calendar: 'iso8601', timeZone: 'UTC', weekday: 'short' }).format(d as Date)
+			],
+			[
 				'%d',
-				(d: Date) => (d.getUTCDay() > 0)
-					? this.timePad(d.getUTCDay())
-					: ''
+				(d) => (d as dateRegexGroups).day
 			],
 			[
 				'%mo',
-				(d: Date) => this.month[d.getUTCMonth()]
+				(d) => this.month[Number((d as dateRegexGroups).month) - 1]
 			],
 			[
 				'%y',
-				(d: Date) => d.getUTCFullYear().toString()
+				(d) => (d as dateRegexGroups).year
 			],
 			[
 				'%h',
-				(d: Date) => this.timePad(d.getUTCHours())
+				(d) => (d as dateRegexGroups).hours
 			],
 			[
 				'%mi',
-				(d: Date) => this.timePad(d.getUTCMinutes())
+				(d) => (d as dateRegexGroups).minutes
 			],
 			[
 				'%s',
-				(d: Date) => this.timePad(d.getUTCSeconds())
+				(d) => (d as dateRegexGroups).seconds
+			],
+			[
+				'%ms',
+				(d) => (d as dateRegexGroups).milliseconds
 			]
 		]);
+		this.dateRegexParse = '^(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})T(?<hours>\\d{2}):(?<minutes>\\d{2}):(?<seconds>\\d{2})\\.(?<milliseconds>\\d{3})Z$';
 
 		this.options = {
 			alwaysThrowError: options?.alwaysThrowError ?? false,
@@ -169,7 +178,7 @@ class Autoindex {
 				? `/${decodeURI(cleanStr(cleanPath))}/`
 				: '/'
 		};
-		
+
 		stat(data.serverPath)
 			.then((statOfFile) => {
 				if (statOfFile.isFile())
@@ -198,17 +207,34 @@ class Autoindex {
 	}
 
 	private dateToHTMLDate(d: Date) {
-		return `${new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(d)}, ${this.timePad(d.getUTCDay() ?? '01')} ${this.month[d.getUTCMonth()]} ${d.getUTCFullYear().toString()} ${this.timePad(d.getUTCHours())}:${this.timePad(d.getUTCMinutes())}:${this.timePad(d.getUTCSeconds())} GMT`;
+		const parseDate = new RegExp(this.dateRegexParse, 'gm').exec(d.toISOString());
+		let lastModified: string | undefined = undefined;
+
+		if (parseDate && parseDate.groups) {
+			const gen = {
+				day: new Intl.DateTimeFormat('en-US', { calendar: 'iso8601', timeZone: 'UTC', weekday: 'short' }).format(d),
+				dayNumber: (parseDate.groups as unknown as dateRegexGroups).day,
+				month: this.month[Number((parseDate.groups as unknown as dateRegexGroups).month) - 1],
+				year: (parseDate.groups as unknown as dateRegexGroups).year,
+				hours: (parseDate.groups as unknown as dateRegexGroups).hours,
+				minutes: (parseDate.groups as unknown as dateRegexGroups).minutes,
+				seconds: (parseDate.groups as unknown as dateRegexGroups).seconds
+			};
+			lastModified = `${gen.day}, ${gen.dayNumber} ${gen.month} ${gen.year} ${gen.hours}:${gen.minutes}:${gen.seconds} GMT`;
+		}
+		return lastModified;
 	}
 
 	private file(data: serveConfig, stat: Stats, res: Response, next: NextFunction) {
 		const mimeType = mime.getType(data.serverPath) ?? 'application/octet-stream';
+		const lastModified = this.dateToHTMLDate(stat.mtime);
 
 		chardet.detectFile(data.serverPath, { sampleSize: 256 })
 			.then((encoding) => {
 				res.setHeader('Content-Length', stat.size);
 				res.setHeader('Content-Type', `${mimeType}; charset=${encoding ?? 'UTF-8'}`);
-				res.setHeader('Last-Modified', this.dateToHTMLDate(stat.mtime));
+				if (lastModified)
+					res.setHeader('Last-Modified', lastModified);
 				res.writeHead(200);
 				createReadStream(data.serverPath)
 					.pipe(res);
@@ -230,42 +256,35 @@ class Autoindex {
 		}
 	}
 
-	private timePad(n: number): string {
-		if (n < 10)
-			return `0${n}`;
-		return String(n); 
-	}
-
-	private splice(s: string, start: number, deleteCount: number) {
-		const temp = [ ...s ];
-		temp.splice(start, deleteCount);
-		return temp.join('');
-	}
-
 	private genTime(_stat: Stats): string {
-		let ret = this.options.dateFormat as string;
+		const parseDate = new RegExp(this.dateRegexParse, 'gm').exec(_stat.mtime.toISOString());
+		let ret = this.options.dateFormat as string, index = 0;
 
-		for (const item of this.dateFormat) {
-			const index = ret.indexOf(item[0]);
-			if (index > -1) {
-				const funcRet = item[1](_stat.mtime);
-				const i = index + item[0].length;
-				if (!funcRet || funcRet.length <= 0) {
-					if (ret.charAt(i) === '?')
-						ret = this.splice(ret, i, 2);
-					ret = ret.replace(item[0], '');
-				} else {
-					if (ret.charAt(i) === '?')
-						ret = this.splice(ret, i, 1);
-					ret = ret.replace(item[0], funcRet);
+		if (parseDate && parseDate.groups) {
+			for (const format of this.dateFormat) {
+				while ((index = ret.indexOf(format[0])) > -1) {
+					const funcRet = format[1](parseDate.groups as unknown as dateRegexGroups);
+					const i = index + format[0].length;
+	
+					if (!funcRet || funcRet.length <= 0) {
+						if (ret.charAt(i) === '?')
+							ret = ret.slice(0, i) + ret.slice(i + 2);
+						ret = ret.replace(format[0], '');
+					} else {
+						if (ret.charAt(i) === '?')
+							ret = ret.slice(0, i) + ret.slice(i + 1);
+						ret = ret.replace(format[0], funcRet);
+					}
 				}
 			}
 		}
+
 		return ret;
 	}
 
 	private generateRow(data: statFile): string {
 		let ret = '<tr>';
+
 		ret += `<td class="link"><a href="${data.el.dirent[0]}">${data.el.dirent[1]}</a></td>`;
 		if (this.options.displayDate)
 			// eslint-disable-next-line no-control-regex

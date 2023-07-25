@@ -247,13 +247,15 @@ It is possible to customize the entire date format of file or folder. To do this
 
 The date is a `string` containing the desired keys, by default `%d?-%mo-%y %h:%mi`.
 
-It is formatted in **UTC** format, and has six keys:
+It is formatted in **UTC** format, and has eight keys:
+- *%wd* → week day
 - *%d* → day
 - *%mo* → month
 - *%y* → year
 - *%h* → hours
 - *%mi* → minutes
 - *%s* → seconds
+- *%ms* → milliseconds
 
 ### Optional character
 
@@ -382,30 +384,24 @@ Below is a list of currently supported errors.
 
 This is how to read the list: *The Node error code* → (**the related HTTP code**) "The error message".
 
-- *EBADF* → (**500**) fd is not a valid open file descriptor
-- *EFAULT* → (**500**) Bad address
-- *EINVAL* → (**500**) Invalid flag specified in flag
-- *ELOOP* → (**500**) Too many symbolic links encountered while traversing the path
-- *ENOMEM* → (**500**) Out of memory
-- *EOVERFLOW* → (**500**)	pathname or fd refers to a file whose size, inode number,
-	</br>
-	or number of blocks cannot be represented in, respectively, the types off_t, ino_t, or blkcnt_t.
-	</br>
-	This error can occur when, for example, an application compiled on a 32-bit platform
-	</br>
-	without -D_FILE_OFFSET_BITS=64 calls stat() on a file whose size exceeds (1<<31)-1 bytes
 - *EACCES* → (**500**) Permission denied
 - *EADDRINUSE* → (**500**) Address already in use
+- *EBADF* → (**500**) fd is not a valid open file descriptor
 - *ECONNREFUSED* → (**500**) Connection refused
 - *ECONNRESET* → (**500**) Connection reset by peer
 - *EEXIST* → (**500**) File exists
+- *EFAULT* → (**500**) Bad address
+- *EINVAL* → (**500**) Invalid flag specified in flag
 - *EISDIR* → (**500**) Is a directory
+- *ELOOP* → (**500**) Too many symbolic links encountered while traversing the path
 - *EMFILE* → (**500**) Too many open files in system
 - *ENAMETOOLONG* → (**414**) URI Too Long
 - *ENOENT* → (**404**) No such file or directory
+- *ENOMEM* → (**500**) Out of memory
 - *ENOTDIR* → (**404**) Not a directory
 - *ENOTEMPTY* → (**500**) Directory not empty
 - *ENOTFOUND* → (**500**) DNS lookup failed
+- *EOVERFLOW* → (**500**)	pathname or fd refers to a file whose size, inode number, or number of blocks cannot be represented in, respectively, the types off_t, ino_t, or blkcnt_t
 - *EPERM* → (**403**) Operation not permitted
 - *EPIPE* → (**500**) Broken pipe
 - *ETIMEDOUT* → (**408**) Request Timeout

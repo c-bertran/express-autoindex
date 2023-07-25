@@ -1,6 +1,6 @@
 {
 	"name": "express-autoindex",
-	"version": "1.4.1",
+	"version": "1.4.2",
 	"description": "express-autoindex produce a directory listing like Nginx, Apache or another, but just with express",
 	"keywords": [
 		"express",
@@ -45,6 +45,7 @@
 	"scripts": {
 		"build": "rollup --bundleConfigAsCjs --config rollup.config.js",
 		"dist": "yarn build && yarn publish",
+		"lint": "eslint --ext .ts ./",
 		"watch": "rollup -w --bundleConfigAsCjs --config rollup.config.js"
 	},
 	"dependencies": {

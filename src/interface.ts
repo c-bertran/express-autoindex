@@ -130,3 +130,13 @@ export interface save {
 	deadline: Date;
 	path: string;
 }
+
+export interface dateRegexGroups {
+	year: string,
+  month: string,
+  day: string,
+  hours: string,
+  minutes: string,
+  seconds: string,
+  milliseconds: string
+}
