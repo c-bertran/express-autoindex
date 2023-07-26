@@ -34,6 +34,7 @@ The objectives are:
 	- [Error code example](#error-code-example)
 - [Minimalist example](#minimalist-example)
 - [Production mode](#production-mode)
+- [Contributors](#contributors)
 - [To do list](#to-do-list)
 - [License](#license)
 - [Dependencies](#dependencies)
@@ -450,6 +451,16 @@ app.listen(PORT, (): void => console.log(`server is running at ${PORT}`));
 ## Production mode
 
 When the variable `process.env.NODE_ENV` is set to **production**, error messages are much less detailed for security reasons.
+
+## Contributors
+
+Thanks to you and your help, express-autoindex is getting better every day. I would like to thank those people who gave their time 🧡
+
+<div align="center">
+	<a href="https://github.com/sefinek24">
+		<img alt="sefinek24" width="70" style="border-radius: 50%" src="https://avatars.githubusercontent.com/u/92880265?v=4" />
+	</a>
+</div>
 
 ## To do list
 
