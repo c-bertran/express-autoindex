@@ -1,5 +1,13 @@
 # express-autoindex
 
+<div>
+	<a href="https://www.npmjs.com/package/express-autoindex">
+		<img alt="npm" src="https://img.shields.io/npm/v/express-autoindex">
+	</a>
+	<img alt="GitHub" src="https://img.shields.io/github/license/c-bertran/express-autoindex">
+	<img alt="npm" src="https://img.shields.io/npm/dm/express-autoindex">
+</div>
+
 `express-autoindex` produce a directory listing like Nginx, Apache or another, but just with express
 
 It takes into consideration most of the mime-types correctly, and page generation is fully customizable.
