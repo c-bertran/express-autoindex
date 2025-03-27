@@ -2,7 +2,7 @@ import chardet from 'chardet';
 import { accessSync, constants, createReadStream, readFileSync, statSync } from 'fs';
 import { readdir, stat } from 'fs/promises';
 import { STATUS_CODES } from 'http';
-import * as mime from 'mime';
+import mime from 'mime';
 import { platform } from 'os';
 import { posix, resolve, win32 } from 'path';
 import errorsMap from './errorsMap';
