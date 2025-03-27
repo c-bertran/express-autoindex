@@ -99,7 +99,7 @@ class Autoindex {
 			const genPath = resolve('.', options.customTemplate);
 			try {
 				this.htmlPage = readFileSync(genPath, { encoding: 'utf-8', flag: 'r' });
-			} catch (e) {
+			} catch {
 				throw new Error(`customTemplate path is incorrect: ${genPath}`);
 			}
 		}
