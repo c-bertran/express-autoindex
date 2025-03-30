@@ -23,11 +23,28 @@ class Autoindex {
 	private isProduction: boolean;
 	private errorCode: errorMap;
 	private htmlPage: string;
+	private rowTemplateBase: string;
+	private rowTemplateWithDate: string;
+	private rowTemplateWithSize: string;
+	private rowTemplateWithBoth: string;
 	private month: string[];
-	private savePage: save[];
+	private savePage: Map<string, save>;
 	private savePageDeadline: number;
 	private dateFormat: Map<string, (d: Date | dateRegexGroups) => string>;
+	private dateFormatCache: Map<string, string>;
+	private dateFormatterIntl: Intl.DateTimeFormat;
 	private dateRegexParse: string;
+	private dateRegexParseCompiled: RegExp;
+	private htmlDateCache: Map<string, string> = new Map();
+	private readonly escapeHtmlMap: Record<string, string> = {
+		'&': '&#38;', // \x26
+		'\n': '&#10;', // \x0A
+		'<': '&#60;',
+		'>': '&#62;',
+		'\'': '&#39;',
+		'"': '&#34;'
+	};
+	
 	
 	options: autoIndexOptions;
 	jsonOption: Record<defaultKeyOfJson, string>;
@@ -38,13 +55,23 @@ class Autoindex {
 		this.isProduction = (process.env.NODE_ENV !== undefined && process.env.NODE_ENV === 'production');
 		this.errorCode = errorsMap();
 		this.htmlPage = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{{title}}</title></head><body><h1>{{title}}</h1><hr/><table>{{content}}</table><hr/></body><style type="text/css">html{font-family:Arial,Helvetica,sans-serif}table{font-family:\'Courier New\',Courier,monospace;font-size:12px;font-weight:400;letter-spacing:normal;line-height:normal;font-style:normal}tr td:first-child{min-width:20%}td a{margin-right:1em}td.size{text-align:end}</style></html>';
+		this.rowTemplateBase = '<tr><td class="link"><a href="${href}">${name}</a></td></tr>';
+		this.rowTemplateWithDate = '<tr><td class="link"><a href="${href}">${name}</a></td><td class="time">${time}</td></tr>';
+		this.rowTemplateWithSize = '<tr><td class="link"><a href="${href}">${name}</a></td><td class="size">${size}</td></tr>';
+		this.rowTemplateWithBoth = '<tr><td class="link"><a href="${href}">${name}</a></td><td class="time">${time}</td><td class="size">${size}</td></tr>';
 		this.month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-		this.savePage = [];
+		this.savePage = new Map();
 		this.savePageDeadline = 300000; /// 5 * 60 * 1000 => 5min
+		this.dateFormatCache = new Map();
+		this.dateFormatterIntl = new Intl.DateTimeFormat('en-US', { 
+			calendar: 'iso8601', 
+			timeZone: 'UTC', 
+			weekday: 'short' 
+		});
 		this.dateFormat = new Map([
 			[
 				'%wd',
-				(d) => new Intl.DateTimeFormat('en-US', { calendar: 'iso8601', timeZone: 'UTC', weekday: 'short' }).format(d as Date)
+				(d) => this.dateFormatterIntl.format(d as Date)
 			],
 			[
 				'%d',
@@ -75,7 +102,9 @@ class Autoindex {
 				(d) => (d as dateRegexGroups).milliseconds
 			]
 		]);
+
 		this.dateRegexParse = '^(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})T(?<hours>\\d{2}):(?<minutes>\\d{2}):(?<seconds>\\d{2})\\.(?<milliseconds>\\d{3})Z$';
+		this.dateRegexParseCompiled = new RegExp(this.dateRegexParse, 'gm');
 
 		this.options = {
 			alwaysThrowError: options?.alwaysThrowError ?? false,
@@ -132,6 +161,17 @@ class Autoindex {
 		return code >= 500;
 	}
 
+	private LRUCache<T>(cache: Map<string, T>, key: string, value: T, maxSize: number): void {
+		if (cache.has(key))
+			cache.delete(key);
+		else if (cache.size >= maxSize) {
+			const oldestKey = cache.keys().next().value;
+			if (oldestKey)
+				cache.delete(oldestKey);
+		}
+		cache.set(key, value);
+	}
+
 	error(e: NodeJS.ErrnoException | number, res: Response) {
 		if (typeof e === 'number') {
 			if (STATUS_CODES[e])
@@ -151,6 +191,11 @@ class Autoindex {
 	}
 
 	parsePath(path: string): string {
+		if (!path.includes('//') && !path.includes('/./') && !path.includes('/../')) {
+			if (path.charAt(path.length - 1) === '/' && path.length > 1)
+				return path.slice(0, path.length - 1);
+			return path;
+		}
 		path = posix.normalize(path.normalize());
 		if (path.charAt(path.length - 1) === '/' && path.length > 1)
 			path = path.slice(0, path.length - 1);
@@ -207,12 +252,18 @@ class Autoindex {
 	}
 
 	private dateToHTMLDate(d: Date) {
-		const parseDate = new RegExp(this.dateRegexParse, 'gm').exec(d.toISOString());
+		const timeKey = d.getTime().toString();
+		const cached = this.htmlDateCache.get(timeKey);
+		if (cached) return cached;
+
+		this.dateRegexParseCompiled.lastIndex = 0;
+		const parseDate = this.dateRegexParseCompiled.exec(d.toISOString());
+
 		let lastModified: string | undefined = undefined;
 
 		if (parseDate && parseDate.groups) {
 			const gen = {
-				day: new Intl.DateTimeFormat('en-US', { calendar: 'iso8601', timeZone: 'UTC', weekday: 'short' }).format(d),
+				day: this.dateFormatterIntl.format(d),
 				dayNumber: (parseDate.groups as unknown as dateRegexGroups).day,
 				month: this.month[Number((parseDate.groups as unknown as dateRegexGroups).month) - 1],
 				year: (parseDate.groups as unknown as dateRegexGroups).year,
@@ -222,6 +273,8 @@ class Autoindex {
 			};
 			lastModified = `${gen.day}, ${gen.dayNumber} ${gen.month} ${gen.year} ${gen.hours}:${gen.minutes}:${gen.seconds} GMT`;
 		}
+		if (lastModified && this.htmlDateCache.size < 500)
+			this.htmlDateCache.set(timeKey, lastModified);
 		return lastModified;
 	}
 
@@ -244,20 +297,25 @@ class Autoindex {
 
 	private checkSavePage(path: string): save | undefined {
 		const currentTime = new Date().getTime();
+		const cached = this.savePage.get(path);
 
-		for (const x in this.savePage) {
-			if (path === this.savePage[x].path) {
-				if (this.savePage[x].deadline.getTime() >= currentTime)
-					return this.savePage[x];
-				else
-					this.savePage.splice(Number(x));
-				break;
-			}
-		}
+		if (cached && cached.deadline.getTime() >= currentTime)
+			return cached;
+		if (cached)
+			this.savePage.delete(path);
+		return undefined;
 	}
 
 	private genTime(_stat: Stats): string {
-		const parseDate = new RegExp(this.dateRegexParse, 'gm').exec(_stat.mtime.toISOString());
+		const timeKey = _stat.mtime.getTime().toString();
+  	const cached = this.dateFormatCache.get(timeKey);
+  	if (cached) {
+			this.LRUCache(this.dateFormatCache, timeKey, cached, 1000);
+			return cached;
+		}
+
+		this.dateRegexParseCompiled.lastIndex = 0;
+		const parseDate = this.dateRegexParseCompiled.exec(_stat.mtime.toISOString());
 		let ret = this.options.dateFormat as string, index = 0;
 
 		if (parseDate && parseDate.groups) {
@@ -279,44 +337,64 @@ class Autoindex {
 			}
 		}
 
+		this.LRUCache(this.dateFormatCache, timeKey, ret, 1000);
 		return ret;
+	}
+
+	private escapeHtml(str: string): string {
+		// eslint-disable-next-line no-control-regex
+		return str.replace(/[\x26\x0A<>'"]/g, char => this.escapeHtmlMap[char] || `&#${char.charCodeAt(0)};`);
 	}
 
 	private generateRow(data: statFile): string {
-		let ret = '<tr>';
+		const href = data.el.dirent[0];
+		const name = data.el.dirent[1];
 
-		ret += `<td class="link"><a href="${data.el.dirent[0]}">${data.el.dirent[1]}</a></td>`;
-		if (this.options.displayDate)
-			// eslint-disable-next-line no-control-regex
-			ret += `<td class="time">${data.el.time.replace(/[\x26\x0A<>'"]/g, (e) => `&#${e.charCodeAt(0)};`)}</td>`; 
-		if (this.options.displaySize)
-			ret += `<td class="size">${data.el.size}</td>`;
-		ret += '</tr>';
-		return ret;
+		if (this.options.displayDate && this.options.displaySize) {
+			return this.rowTemplateWithBoth
+				.replace('${href}', href)
+				.replace('${name}', name)
+				.replace('${time}', this.escapeHtml(data.el.time))
+				.replace('${size}', data.el.size);
+		}
+		if (this.options.displayDate) {
+			return this.rowTemplateWithDate
+				.replace('${href}', href)
+				.replace('${name}', name)
+				.replace('${time}', this.escapeHtml(data.el.time));
+		}
+		if (this.options.displaySize) {
+			return this.rowTemplateWithSize
+				.replace('${href}', href)
+				.replace('${name}', name)
+				.replace('${size}', data.el.size);
+		}
+		return this.rowTemplateBase
+			.replace('${href}', href)
+			.replace('${name}', name);
 	}
 
 	private generateJson(element: statFile): Record<string, boolean | string | number> {
-		const isExist = (key: string) => Object.prototype.hasOwnProperty.call(this.jsonOption, key);
-		const ret: Record<defaultKeyOfJson | string, boolean | string | number> = {};
+		const isDir = element.dirent.isDirectory();
 
-		if (this.jsonOption) {
-			if (isExist('isDir'))
-				ret[this.jsonOption.isDir] = element.dirent.isDirectory();
-			if (isExist('name'))
-				ret[this.jsonOption.name] = element.el.dirent[1];
-			if (isExist('path'))
-				ret[this.jsonOption.path] = element.el.dirent[0];
-			if (isExist('time'))
-				ret[this.jsonOption.time] = element.el.time;
-			if (isExist('size'))
-				ret[this.jsonOption.size] = Number(element.el.size);
-		} else {
-			ret['isDir'] = element.dirent.isDirectory();
-			ret['name'] = element.el.dirent[1];
-			ret['path'] = element.el.dirent[0];
-			ret['time'] = element.el.time;
-			ret['size'] = Number(element.el.size);
+		if (!this.jsonOption) {
+			return {
+				isDir,
+				name: element.el.dirent[1],
+				path: element.el.dirent[0],
+				time: element.el.time,
+				size: Number(element.el.size)
+			};
 		}
+
+		const ret: Record<defaultKeyOfJson | string, boolean | string | number> = {};
+		const jsonOpt = this.jsonOption;
+		if ('isDir' in jsonOpt) ret[jsonOpt.isDir] = isDir;
+		if ('name' in jsonOpt) ret[jsonOpt.name] = element.el.dirent[1];
+		if ('path' in jsonOpt) ret[jsonOpt.path] = element.el.dirent[0];
+		if ('time' in jsonOpt) ret[jsonOpt.time] = element.el.time;
+		if ('size' in jsonOpt) ret[jsonOpt.size] = Number(element.el.size);
+
 		return ret;
 	}
 
@@ -330,15 +408,19 @@ class Autoindex {
 			return this.send(checkSavePage.data, res);
 		readdir(data.serverPath, { encoding: 'utf-8', withFileTypes: true })
 			.then(async (dirs) => {
-				for (const el of dirs) {
-					if (
-						(!el.isDirectory() && !el.isFile()) ||
-						(!this.options.displayDotfile && el.name.charAt(0) === '.') ||
-						(this.options.exclude && this.options.exclude.test(el.name))
-					)
-						continue;
-					const _stat = await stat(resolve(data.serverPath, el.name));
+				const filteredDirs = dirs.filter(el => 
+					(el.isDirectory() || el.isFile()) && 
+					(this.options.displayDotfile || el.name.charAt(0) !== '.') &&
+					(!this.options.exclude || !this.options.exclude.test(el.name))
+				);
+				const results = await Promise.all(
+					filteredDirs.map(async el => {
+						const _stat = await stat(resolve(data.serverPath, el.name));
+						return { dirent: el, stat: _stat };
+					})
+				);
 
+				for (const { dirent: el, stat: _stat } of results) {
 					elements.push({
 						dirent: el,
 						el: {
@@ -373,15 +455,19 @@ class Autoindex {
 						} else
 							htmlContent.push(this.generateRow(el));
 					}
-					if (this.options.dirAtTop)
-						htmlContent.push(...[ ...genDirs, ...genFiles ]);
+					if (this.options.dirAtTop) {
+						for (const dir of genDirs)
+							htmlContent.push(dir);
+						for (const file of genFiles)
+							htmlContent.push(file);
+					}
 					dataReturn = this.htmlPage
 						.replaceAll(/{{\s?title\s?}}/g, `Index of ${data.title}`)
 						.replaceAll(/{{\s?content\s?}}/g, htmlContent.join(''));
 				}
 
 				if (this.options.cache !== undefined) {
-					this.savePage.push({
+					this.savePage.set(data.savePath, {
 						json: this.options.json ?? false,
 						data: dataReturn,
 						deadline: new Date(new Date().getTime() + this.savePageDeadline),
@@ -404,16 +490,17 @@ class Autoindex {
 export default (root: string, options: autoIndexOptions | undefined = undefined): (
 	(req: Request, res: Response, next: NextFunction) => void
 ) => {
-	let instance: Autoindex | undefined = undefined;
+	const instance = new Autoindex(root, '', options);
 
 	return (req: Request, res: Response, next: NextFunction) => {
-		if (instance === undefined)
-			instance = new Autoindex(root, req.baseUrl, options);
+		if (req.baseUrl && (!instance.path || instance.path !== req.baseUrl))
+			instance.path = req.baseUrl;
 		if (instance.options.strict && req.method !== 'GET' && req.method !== 'HEAD') {
 			res.status(405);
 			res.setHeader('Allow', 'GET, HEAD');
 			res.setHeader('Content-Length', '0');
 			res.end();
+			return;
 		}
 		const newPath = (instance.path)
 			? instance.parsePath(`${instance.path}/${req.path}`)
