@@ -1,6 +1,6 @@
 {
 	"name": "express-autoindex",
-	"version": "1.4.4",
+	"version": "1.5.0",
 	"description": "express-autoindex produce a directory listing like Nginx, Apache or another, but just with express",
 	"keywords": [
 		"express",
